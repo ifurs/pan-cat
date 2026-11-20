@@ -273,11 +273,11 @@ const RANKS=[[50,'Сором\'язливе кошеня'],[150,'Дрібний �
 const EVENTS=['blackout','laser','box','robot','cucumber','grandma','catnip'];
 /* owner mood: rolled per room, weighted by the adaptive difficulty */
 const MOODS={
- sleepy:{em:'😴',name:'сонний',back:1.45,warn:1.35,look:0.85,fake:0.12,idle:['*позіхає*','ще 5 хвилиночок…','zzz… а? що?']},
+ sleepy:{em:'😴',name:'сонний',back:1.45,warn:1.35,look:0.85,fake:0.12,charm:1.25,idle:['*позіхає*','ще 5 хвилиночок…','zzz… а? що?']},
  calm:{em:'🙂',name:'спокійний',back:1,warn:1,look:1,fake:0.2},
- phone:{em:'📱',name:'залип у телефон',back:1.3,warn:0.7,look:0.9,fake:0.15,idle:['ха-ха, мем','ще одне відео…','*скрол-скрол*']},
- sus:{em:'🧐',name:'підозріливий',back:0.8,warn:1.05,look:1.2,fake:0.42,idle:['щось тут не так…','Пиріжок, ти що задумав?','я все чую…']},
- coffee:{em:'☕',name:'після кави',back:0.75,warn:0.7,look:1.1,fake:0.25,idle:['ще кави!','працюємо-працюємо!','так-так-так!']},
+ phone:{em:'📱',name:'залип у телефон',back:1.3,warn:0.7,look:0.9,fake:0.15,charm:0.55,idle:['ха-ха, мем','ще одне відео…','*скрол-скрол*']},
+ sus:{em:'🧐',name:'підозріливий',back:0.8,warn:1.05,look:1.2,fake:0.42,charm:0.7,idle:['щось тут не так…','Пиріжок, ти що задумав?','я все чую…']},
+ coffee:{em:'☕',name:'після кави',back:0.75,warn:0.7,look:1.1,fake:0.25,charm:0.9,idle:['ще кави!','працюємо-працюємо!','так-так-так!']},
 };
 const SLOTS=[{key:'coat',name:'Шерсть',list:COATS},{key:'eyes',name:'Очі',list:EYES},{key:'head',name:'Голова',list:HEADS},{key:'neck',name:'Шия',list:NECKS}];
 let SAVE={fish:0,coat:'ginger',eyes:'green',head:'none',neck:'none',owned:[],skill:0.4};
@@ -383,9 +383,10 @@ let BTN=[], uiSparks=[], toast=null, WP={};
 function reset(){
   G={score:0,lives:3,bored:0,combo:1,lastBreak:-9,t:0,item:null,spawnT:0.4,broken:0,ending:0,hint:4,
      room:0,level:0,roomCount:0,banner:null,ev:null,evT:rand(11,15),lastEv:'',forceNext:null,lastItem:'',
-     hype:0,beatT:0,beat:0,skill:SAVE.skill,mood:'calm',roomLoss:0,treatCD:3,fishGain:0,
+     hype:0,beatT:0,beat:0,skill:SAVE.skill,charm:0,meltIn:0,meltRoom:0,pose:null,poseCD:0,lastPose:'',melt:0,charmHint:0,
+     stats:{poses:0,seen:0,perfect:0,wasted:0,melts:0},mood:'calm',roomLoss:0,treatCD:3,fishGain:0,
      cat:{x:24,swipe:0,face:'idle',faceT:0,blink:2,jy:0,jv:0,ex:0,ey:0,squash:0},
-     owner:{who:'owner',st:'back',t:3,fake:false,clean:true,say:'',sayT:0},
+     owner:{who:'owner',st:'back',t:3,fake:false,clean:true,say:'',sayT:0,lookPoses:0},
      particles:[],floats:[],sparks:[],shake:0};
 }
 reset();
@@ -504,6 +505,52 @@ function caught(){
   float('−1 ❤',g.cat.x+10,TABLE_Y-30,'#ff5c5c',10);
   loseLife();
 }
+/* ---- charm: cute poses that melt the owner ---- */
+const POSES=[
+ {id:'blink',name:'повільне моргання',v:18,d:0.7},
+ {id:'tilt',name:'нахил голівки',v:20,d:0.8},
+ {id:'paw',name:'дай лапу',v:23,d:0.9},
+ {id:'flop',name:'плюх на бік',v:27,d:1.05},
+ {id:'roll',name:'перекид!',v:31,d:1.1},
+];
+const AWW=['Ооо 🥺','Хто тут такий милий?','Ну як на тебе сваритись…','Пиріжечок мій 💕','Ааа, яке котятко!','Котик-муркотик 🥰'];
+function charm(){
+  const g=G,o=g.owner,c=g.cat,ev=g.ev;
+  if(state!=='play'||g.ending>0||g.banner||g.pose||g.poseCD>0||g.melt>0)return;
+  if(ev&&(ev.type==='laser'||(ev.type==='box'&&ev.inBox>0)))return;
+  const P=pick(POSES.filter(p=>p.id!==g.lastPose));
+  g.lastPose=P.id; g.pose={k:P.id,t:P.d,d:P.d,v:P.v,name:P.name,early:o.st==='turn',scored:false};
+  g.poseCD=P.d+0.3; g.stats.poses++; c.squash=0.12; g.charmHint=0;
+  sfx.purr(); if(P.id==='roll'||P.id==='flop')later(()=>meow(),140); else if(P.id!=='blink')later(()=>sfx.trill(),120);
+  if(o.st==='look')scorePose();
+}
+function scorePose(){
+  const g=G,o=g.owner,p=g.pose,c=g.cat; if(!p||p.scored)return; p.scored=true;
+  const gr=o.who==='granny', mm=gr?1.6:(mood().charm||1);
+  if(o.lookPoses>=2&&!gr){ // overacting: the owner smells a rat
+    o.lookPoses++; g.stats.over=(g.stats.over||0)+1; g.charm=Math.max(0,g.charm-meltNeed()*0.3); o.t+=0.7;
+    say(pick(['Щось ти підозріло милий… 🤨','Так, що ти накоїв?','Ага, підлизуємось?']),1.4);
+    float('переграв 🤨',c.x+11,TABLE_Y-40,'#d8c8e8',7,1.1); return;
+  }
+  const chain=o.lookPoses?1.3:1, perfect=p.early, gain=p.v*mm*(perfect?1.5:1)*chain;
+  o.lookPoses++; g.stats.seen++; if(perfect)g.stats.perfect++;
+  g.charm=Math.min(meltNeed(),g.charm+gain); g.score+=Math.round(3*chain*(perfect?2:1)); g.bored=Math.max(0,g.bored-4);
+  sparkle(g.sparks,c.x+11,TABLE_Y-22,perfect?6:3,'heart');
+  float(perfect?'Ідеальний момент! 💕':p.name+' 💕',Math.max(62,c.x+11),TABLE_Y-40,perfect?'#ff8fc8':'#ffc2dc',perfect?8:7,1.2);
+  if(o.sayT<=0||Math.random()<0.5)say(gr?'Ой, яке котятко! 🥟':pick(AWW),1.3);
+  if(g.charm>=meltNeed()&&g.melt<=0)g.meltIn=0.35;
+}
+function wastePose(){ // posing for nobody: the cat sulks
+  const g=G,c=g.cat; g.stats.wasted++; g.bored=Math.min(99,g.bored+7); g.charm=Math.max(0,g.charm-8);
+  float('ніхто не бачив 😿',c.x+11,TABLE_Y-36,'#d8c8e8',6,0.9);
+}
+const meltNeed=()=>100*(1+0.6*G.meltRoom);
+function melt(){
+  const g=G,o=g.owner; g.charm=0; g.stats.melts++; g.meltRoom++;
+  if(o.who==='granny'){g.score+=25;g.bored=0;float('👵 Бабуся розчулилась: +25, нудьга = 0',90,140,'#ffb3c1',8,1.8);sfx.nom();return;}
+  g.melt=4; o.st='back'; o.t=4.4; o.fake=false;
+  say('Це треба сфоткати! 📸',1.6); float('🥰 ГОСПОДАР РОЗТАНУВ! ОЧКИ ×2',90,140,'#ff8fc8',9,1.8); sfx.fanfare(); later(()=>sfx.trill(),300);
+}
 function tap(lx,ly){
   const g=G; if(g.ending>0||g.banner)return;
   const ev=g.ev, o=g.owner, c=g.cat;
@@ -524,6 +571,7 @@ function tap(lx,ly){
   }
   const it=g.item;
   if(it&&it.def.beh==='treat'&&it.st==='table'&&Math.abs(c.x-(it.x-PAW))<10){eatTreat(it);return;}
+  if(g.pose&&!g.pose.scored)wastePose(); g.pose=null;
   c.swipe=0.16; c.squash=0.12; sfx.swipe(); g.hint=Math.min(g.hint,0.5);
   if(o.st==='look'){caught();return;}
   if(it&&it.st==='table'&&Math.abs(c.x-(it.x-PAW))<8){it.vx+=110/it.def.mass*(g.hype>0?1.8:1);}
@@ -542,7 +590,7 @@ function burst(x,y,cols,n,sx,sy,big){
 function award(it,x){
   const g=G,d=it.def,o=g.owner;
   g.combo=(g.t-g.lastBreak<3)?Math.min(g.combo+1,5):1; g.lastBreak=g.t;
-  const mult=(g.hype>0?2:1)*(g.ev&&g.ev.type==='blackout'?2:1);
+  const mult=(g.hype>0?2:1)*(g.ev&&g.ev.type==='blackout'?2:1)*(g.melt>0?2:1);
   let pts=d.val*g.combo*mult;
   if(g.ev&&g.ev.type==='robot'&&Math.abs(x-(g.ev.rx+9))<16&&it.y>FLOOR_Y-40){
     pts+=60; g.ev.spin=1.2; float('СТРАЙК! 🎳 +60',x,FLOOR_Y-46,'#5ad1ff',10,1.4); later(sfx.beep,150);
@@ -600,7 +648,7 @@ function nextRoom(){
   adjSkill(g.roomLoss===0?0.06:-0.02); g.roomLoss=0; g.mood=pickMood();
   sparkle(g.sparks,90,150,10,'star');
   g.banner={t:2.8,title:room().emoji+' '+room().name,sub:lap>0?'Коло '+(lap+1)+' · сюди вже повертались':room().sub,lvl:g.level+1,mood:g.mood};
-  g.bored=Math.max(0,g.bored-30); g.owner.st='back'; g.owner.t=4; g.owner.sayT=0; g.cat.x=24;
+  g.bored=Math.max(0,g.bored-30); g.owner.st='back'; g.owner.t=4; g.owner.sayT=0; g.cat.x=24; g.meltRoom=0; g.charm=Math.min(g.charm,40);
   sfx.fanfare();
 }
 
@@ -636,8 +684,9 @@ function update(dt){
       if(o.t<=0){o.st='turn';o.t=gr?0.8:Math.max(0.3,(0.9-diff*0.5)*mood().warn);o.fake=Math.random()<(gr?0.35:mood().fake);sfx.hm();}
     }else if(o.st==='turn'){
       if(o.t<=0){
-        if(o.fake){o.st='back';o.t=rand(1.2,3)*mood().back;say(gr?'хррр...':'...а, здалося',1.2);}
-        else{o.st='look';o.t=gr?rand(1.4,2.2):(rand(1,1.9)+diff*0.6)*mood().look;o.clean=true;}
+        if(o.fake){o.st='back';o.t=rand(1.2,3)*mood().back;say(gr?'хррр...':'...а, здалося',1.2);if(g.pose&&g.pose.early)g.pose.early=false;}
+        else{o.st='look';o.t=gr?rand(1.4,2.2):(rand(1,1.9)+diff*0.6)*mood().look;o.clean=true;o.lookPoses=0;if(g.pose)scorePose();
+          if(g.stats.poses===0&&g.level<2)g.charmHint=2.2;}
       }
     }else if(o.st==='look'){
       if(o.t<=0){
@@ -649,6 +698,13 @@ function update(dt){
       if(o.t<=0){o.st='back';o.t=rand(1.5,3);}
     }
   }
+
+  /* charm */
+  if(g.melt>0){g.melt-=dt;o.t=Math.max(o.t,0.6);if(g.melt<=0){o.t=rand(0.8,1.6);float('📸 Фотосесію закінчено',90,150,'#fff',7,1.2);}}
+  else if(!g.banner)g.charm=Math.max(0,g.charm-dt*3.5);
+  if(g.meltIn>0){g.meltIn-=dt;if(g.meltIn<=0&&g.ending<=0)melt();}
+  if(g.poseCD>0)g.poseCD-=dt; if(g.charmHint>0)g.charmHint-=dt;
+  if(g.pose){g.pose.t-=dt;if(g.pose.t<=0){if(!g.pose.scored)wastePose();g.pose=null;}}
 
   /* boredom */
   const inBox=ev&&ev.type==='box'&&ev.inBox>0;
@@ -670,7 +726,7 @@ function update(dt){
   c.blink-=dt; if(c.blink<-0.12)c.blink=rand(2,4);
   if(c.jy>0||c.jv!==0){c.jy+=c.jv*dt;c.jv-=900*dt;if(c.jy<=0){c.jy=0;c.jv=0;}}
   const it=g.item;
-  if(it&&(it.st==='table'||it.st==='drop')&&!inBox){
+  if(it&&(it.st==='table'||it.st==='drop')&&!inBox&&!g.pose){
     const tx=Math.min(TABLE_EDGE-CAT_W,it.x-PAW);
     c.x+=(tx-c.x)*Math.min(1,dt*(g.hype>0?16:9));
   }
@@ -860,6 +916,7 @@ function drawOwner(){
     R(ox+5,oy,12,1,HAIR);R(ox+4,oy+1,14,11,HAIR);R(ox+5,oy+12,12,1,HAIR);
     R(ox+3,oy+5,1,3,SKIN);
     if(st==='turn'){R(ox+12,oy+4,6,8,SKIN);R(ox+18,oy+6,1,3,SKIN);R(ox+15,oy+6,2,2,'#000');R(ox+14,oy+5,3,1,HAIR);R(ox+18,oy+9,1,1,SKIN);}
+    else if(G.melt>0){R(ox+18,oy+5,1,3,SKIN);R(ox+19,oy+2,2,13,HOOD);R(ox+18,oy-7,6,9,K);R(ox+19,oy-6,4,7,'#9fe8ff');R(ox+20,oy-5,1,1,'#fff');}
     else{R(ox+18,oy+5,1,3,SKIN);R(ox+19,oy+18,2,4,'#9fe8ff');}
   }else{
     const face=st==='angry'?'#ff8a70':SKIN;
@@ -912,6 +969,7 @@ function drawTable(){
 }
 function catFace(){
   const g=G,c=g.cat,o=g.owner,ev=g.ev;
+  if(state==='play'&&g.pose)return g.pose.k==='blink'?'blink':g.pose.k==='tilt'?'idle':g.pose.k==='roll'?'shock':'happy';
   if(c.faceT>0)return c.face;
   if(state==='play'){
     if(o.st==='turn'||o.st==='look')return 'angel';
@@ -931,7 +989,22 @@ function drawCat(){
   const sw=Math.max(8,18-Math.round(c.jy/3));
   a.fillStyle='rgba(60,25,15,0.22)';a.fillRect(cx+11-sw/2,TABLE_Y,sw,2);
   const sq=c.squash>0?1:0, breathe=(!sq&&Math.sin(T*2.4)>0.75)?1:0;
-  a.drawImage(CB,cx-BOX-sq,cy-BOY+sq*2-breathe,CB.width+sq*2,CB.height-sq*2+breathe);
+  const P=g.pose;
+  if(P&&(P.k==='tilt'||P.k==='flop'||P.k==='roll')){
+    const e=Math.min(1,(P.d-P.t)/0.14), out=Math.min(1,P.t/0.12), k=Math.min(e,out);
+    a.save();a.imageSmoothingEnabled=false;
+    if(P.k==='tilt'){a.translate(cx+11,TABLE_Y);a.rotate(0.22*k);a.drawImage(CB,-BOX-11,-BOY-CAT_H);}
+    else if(P.k==='flop'){a.translate(cx+10,TABLE_Y-9);a.rotate(Math.PI/2*k);a.drawImage(CB,-BOX-11,-BOY-10);}
+    else{const q=1-P.t/P.d;a.translate(cx+11,TABLE_Y-10-Math.round(Math.sin(q*Math.PI)*9));a.rotate(-Math.PI*2*Math.min(1,q*1.15));a.drawImage(CB,-BOX-11,-BOY-10);}
+    a.restore();
+  }else a.drawImage(CB,cx-BOX-sq,cy-BOY+sq*2-breathe,CB.width+sq*2,CB.height-sq*2+breathe);
+  if(P&&P.k==='paw'){
+    const cz=COATS.find(z=>z.id===SAVE.coat)||COATS[0], px=cx-1, py=cy+3+(Math.floor(T*6)%2);
+    R(px,py,6,8,cz.k||K);R(px+1,py+1,4,6,cz.w);
+    R(px+1,py+1,1,1,'#ff9ab5');R(px+4,py+1,1,1,'#ff9ab5');R(px+2,py+1,2,1,'#ff9ab5');R(px+2,py+3,2,2,'#ff9ab5');
+  }
+  if(P)for(let i=0;i<2;i++){const hy=cy-6-((T*14+i*7)%10);if(Math.floor(T*4+i)%2)R(cx+8+i*7,hy,1,1,'#ff8fc8');}
+  if(g.melt>0&&(g.melt%0.9)<0.09){a.fillStyle='rgba(255,255,255,0.7)';a.fillRect(cx-2,cy-6,CAT_W+4,CAT_H+8);}
   if(c.swipe>0){
     const cz=COATS.find(z=>z.id===SAVE.coat)||COATS[0];
     const ext=Math.round(Math.sin((1-c.swipe/0.16)*Math.PI)*7), px=cx+17, py=cy+11;
@@ -1074,6 +1147,19 @@ function hud(){
   rr(31,18.5,86,6,3,null,'rgba(43,29,20,0.5)',0.6);
   for(let i=0;i<ROOM_LEN;i++)pawPx(123+i*7.7,17.5,i<g.roomCount?'#ef7a2e':'#e8d3c8');
 }
+function charmButton(){
+  const g=G,o=g.owner,bx=5,by=287,bw=30,bh=27,ch=g.melt>0?1:g.charm/meltNeed();
+  const ready=!g.pose&&g.poseCD<=0&&g.melt<=0, watch=o.st==='turn'||o.st==='look';
+  ctx.save();ctx.globalAlpha=ready||g.melt>0?1:0.55;
+  rr(bx,by,bw,bh,8,'rgba(255,247,238,0.94)',K);
+  if(ch>0.03){ctx.save();rrPath(bx,by,bw,bh,8);ctx.clip();
+    ctx.fillStyle=g.melt>0?(Math.floor(T*6)%2?'#ffd84d':'#ffb3d1'):'#ffb3d1';
+    ctx.fillRect(X(bx),Y(by+bh*(1-ch)),bw*S,bh*ch*S);ctx.restore();rr(bx,by,bw,bh,8,null,K);}
+  if(ready&&watch){ctx.globalAlpha=0.5+0.5*Math.sin(T*14);rr(bx-1.5,by-1.5,bw+3,bh+3,9,null,'#ff4d8d',1.4);ctx.globalAlpha=1;}
+  label('💕',bx+bw/2,by+10.5,11,'#000');
+  label(g.melt>0?'📸 ×2':'чари',bx+bw/2,by+21.5,5.5,'#a0507a');
+  ctx.restore();
+}
 function drawCatUI(face,cx,top,k,o){
   renderCat(face,o);
   ctx.imageSmoothingEnabled=false;
@@ -1138,6 +1224,8 @@ function render(){
     if(hint)txt(hint,90,50,6,'#ffffff','center',0.75+0.25*Math.sin(T*6));
     for(const f of g.floats)txt(f.txt,f.x,f.y,f.size,f.col,'center',Math.min(1,(f.life-f.t)*3));
     if(g.hint>0&&!g.banner)txt('Тапай по екрану — штовхай!',90,172,7,'#ffffff','center',Math.min(1,g.hint));
+    if(g.charmHint>0&&!g.banner)txt('Тисни 💕 — позуй, поки він дивиться!',90,236,7,'#ffc2dc','center',Math.min(1,g.charmHint*2));
+    charmButton();
     if(g.banner){
       const b=g.banner,al=Math.max(0,Math.min(1,b.t*2,(2.8-b.t)*4+0.3)),bm=MOODS[b.mood]||MOODS.calm;
       ctx.save();ctx.globalAlpha=al;
@@ -1162,7 +1250,7 @@ function render(){
     for(const p of uiSparks)drawSpark(p,PR);
     label('Тапай — кіт штовхає речі зі столу',90,172,6.5,'#6b4a3a');
     label('Господар дивиться? Замри, будь янголом 😇',90,183,6.2,'#6b4a3a');
-    label('Щоразу він у новому настрої 🎲',90,194,6.2,'#a0507a');
+    label('💕 Позуй, коли дивиться, — і він розтане',90,194,6.2,'#a0507a');
     button(40,206,100,24,'ГРАТИ ▶','#ff8a5c',start,10);
     button(40,238,100,21,'🎀 ГАРДЕРОБ','#b98ad8',openWardrobe,8);
     rr(42,268,96,16,8,'rgba(255,255,255,0.75)',K,0.6);
@@ -1223,13 +1311,15 @@ cv.addEventListener('pointerdown',e=>{
     return;
   }
   if(lx>152&&ly>292){muted=!muted;return;}
+  if(lx<38&&ly>283){charm();return;}
   tap(lx,ly);
 },{passive:false});
 document.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('keydown',e=>{
   if(e.code==='Escape'&&state==='wardrobe'){state='title';return;}
+  if((e.code==='KeyC'||e.code==='ArrowDown'||e.code==='ShiftLeft')&&state==='play'){ac();charm();return;}
   if(e.code==='Space'||e.code==='Enter'){ac();if(state==='play')tap(-99,-99);else if(state==='wardrobe')state='title';else if(state==='title'||(state==='over'&&overT>0.8))start();}});
-window.__pz={step:dt=>{update(dt);render();},SAVE:()=>SAVE,wardrobe:openWardrobe,cat:(f,lk)=>{renderCat(f,{lk});return CB;},G:()=>G,ev:t=>startEvent(t),next:()=>{G.roomCount=ROOM_LEN;G.item=null;},st:()=>state,snd:()=>{ac();return {meow,sfx,petCat,buf:()=>SND_BUF};}};
+window.__pz={step:dt=>{update(dt);render();},SAVE:()=>SAVE,wardrobe:openWardrobe,cat:(f,lk)=>{renderCat(f,{lk});return CB;},G:()=>G,ev:t=>startEvent(t),next:()=>{G.roomCount=ROOM_LEN;G.item=null;},st:()=>state,charm:()=>charm(),upd:dt=>update(dt),snd:()=>{ac();return {meow,sfx,petCat,buf:()=>SND_BUF};}};
 
 let last=performance.now();
 function loop(now){
