@@ -1,0 +1,194 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Cat shapes</title>
+<style>
+body{margin:0;background:#2a1c33;font-family:system-ui,sans-serif;color:#fff3dc;width:1120px}
+h1{font-size:26px;margin:22px 28px 4px}
+.sub{margin:0 28px 14px;opacity:.75;font-size:15px}
+#lineup{display:block;margin:0 28px 18px;border-radius:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 28px 28px}
+.card{background:#3a2747;border-radius:16px;padding:14px 16px}
+.card h2{margin:0;font-size:20px}.card h2 b{color:#ffb35c;margin-right:6px}
+.card p{margin:3px 0 10px;font-size:13.5px;opacity:.8;min-height:34px}
+canvas{image-rendering:pixelated}
+.faces{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:flex-end}
+.faces div{text-align:center;font-size:11px;opacity:.85}
+.faces canvas{background:#f3dccb;border-radius:8px;display:block}
+.scene{border-radius:10px;display:block}
+</style></head><body>
+<h1>Пиріжок: варіанти форми</h1>
+<div class="sub">Однаковий масштаб, однакові кольори. Нижче кожен варіант зблизька, з виразами мордочки.</div>
+<canvas id="lineup"></canvas>
+<div class="grid" id="grid"></div>
+<script src="chibi_rows.js"></script>
+<script>
+const COL={k:'#2b1d14',o:'#f39a2e',O:'#c9601c',w:'#fff3dc',i:'#ffa3b5',p:'#ff6b8a',P:'#ffa3b5',h:'#ffffff',y:'#ffe14d',e:'#6fd06a'};
+/* ---- mask helpers (continuous coords, pixel centres) ---- */
+const E=(cx,cy,rx,ry)=>(x,y)=>((x+.5-cx)/rx)**2+((y+.5-cy)/ry)**2<=1;
+const RR=(x0,y0,w,h,r)=>(x,y)=>{const px=x+.5,py=y+.5;if(px<x0||py<y0||px>x0+w||py>y0+h)return false;
+  const cx=Math.min(Math.max(px,x0+r),x0+w-r),cy=Math.min(Math.max(py,y0+r),y0+h-r);return (px-cx)**2+(py-cy)**2<=r*r+.01;};
+const T=(ax,ay,bx,by,cx,cy)=>(x,y)=>{const px=x+.5,py=y+.5;
+  const d=(x1,y1,x2,y2)=>(px-x2)*(y1-y2)-(x1-x2)*(py-y2);
+  const d1=d(ax,ay,bx,by),d2=d(bx,by,cx,cy),d3=d(cx,cy,ax,ay);
+  return !((d1<0||d2<0||d3<0)&&(d1>0||d2>0||d3>0));};
+const U=(...f)=>(x,y)=>f.some(g=>g(x,y));
+const I=(a,b)=>(x,y)=>a(x,y)&&b(x,y);
+const mir=(W,f)=>(x,y)=>f(W-1-x,y);
+const at=list=>{const s=new Set(list.map(p=>p.join(',')));return (x,y)=>s.has(x+','+y);};
+
+/* ---- grid ---- */
+const PL=11,PT=7;
+function newGrid(w,h){return {w:w+PL+3,h:h+PT+2,c:Array.from({length:h+PT+2},()=>Array(w+PL+3).fill('.'))};}
+function put(g,x,y,ch){x+=PL;y+=PT;if(x>=0&&y>=0&&x<g.w&&y<g.h)g.c[y][x]=ch;}
+function get(g,x,y){x+=PL;y+=PT;return (x>=0&&y>=0&&x<g.w&&y<g.h)?g.c[y][x]:'.';}
+function part(g,mask,paint){
+  const ins=[];for(let y=-PT;y<g.h-PT;y++)for(let x=-PL;x<g.w-PL;x++)if(mask(x,y))ins.push([x,y]);
+  const S=new Set(ins.map(p=>p.join(',')));
+  for(const [x,y] of ins)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){if(!S.has((x+dx)+','+(y+dy)))put(g,x+dx,y+dy,'k');}
+  for(const [x,y] of ins)put(g,x,y,paint?paint(x,y,S):'o');
+}
+const inner=(S,x,y)=>{for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(!S.has((x+dx)+','+(y+dy)))return false;return true;};
+const earPaint=(x,y,S)=>inner(S,x,y)?'i':'o';
+function tail(g,t,pose){
+  const pts=[];for(let i=0;i<8;i++){const wave=Math.sin(pose*1.7+i*0.7)*i*0.35;
+    pts.push([Math.round(t.x-i*(t.dx||1.1)),Math.round(t.y-i*(t.dy||1.5)+wave)]);}
+  const m=(x,y)=>pts.some(p=>x>=p[0]&&x<p[0]+2&&y>=p[1]&&y<p[1]+2);
+  part(g,m,(x,y)=>{const k=pts.findIndex(p=>x>=p[0]&&x<p[0]+2&&y>=p[1]&&y<p[1]+2);return k>=6||k%3===2?'O':'o';});
+}
+
+/* ---- face ---- */
+function face(g,f,F){
+  const [ew,eh]=f.es||[2,3];
+  if(f.blushes)for(const [x,y] of f.blushes){put(g,x,y,'P');put(g,x+1,y,'P');}
+  if(f.nose){const [n,ny]=f.nose;put(g,n,ny,'p');if(f.nw!==1)put(g,n+1,ny,'p');
+    if(F==='shock'){put(g,n,ny+2,'k');if(f.nw!==1)put(g,n+1,ny+2,'k');put(g,n,ny+1,f.mc||'w');if(f.nw!==1)put(g,n+1,ny+1,f.mc||'w');}
+    else if(f.nw===1){put(g,n-1,ny+1,'k');put(g,n+1,ny+1,'k');}
+    else{put(g,n-1,ny+1,'k');put(g,n+2,ny+1,'k');put(g,n,ny+2,'k');put(g,n+1,ny+2,'k');}}
+  f.eyes.forEach(([x,y],s)=>{
+    if(F==='idle'){
+      if(f.big){put(g,x+1,y,'k');put(g,x+2,y,'k');for(let i=0;i<4;i++){put(g,x+i,y+1,'k');put(g,x+i,y+2,'k');}put(g,x+1,y+3,'k');put(g,x+2,y+3,'k');put(g,x+1,y+2,'e');put(g,x+2,y+2,'e');put(g,x+1,y+1,'h');}
+      else{for(let j=0;j<eh;j++)for(let i=0;i<ew;i++)put(g,x+i,y+j,'k');put(g,x+(s?0:0),y,'h');}
+    }else if(F==='blink'){const w=f.big?4:ew;for(let i=0;i<w;i++)put(g,x+i,y+(f.big?2:eh-1),'k');}
+    else if(F==='angel'){const w=f.big?4:ew,b=y+(f.big?1:eh-2);
+      for(let i=0;i<w;i++)put(g,x+i,b,'k');put(g,x-1,b+1,'k');put(g,x+w,b+1,'k');}
+    else if(F==='push'){const w=f.big?4:ew,b=y+(f.big?2:eh-1);
+      if(!s){put(g,x,b-1,'k');put(g,x+1,b,'k');put(g,x+w-1,b,'k');put(g,x,b+1,'k');} // >
+      else{put(g,x+w-1,b-1,'k');put(g,x+w-2,b,'k');put(g,x,b,'k');put(g,x+w-1,b+1,'k');} // <
+    }else if(F==='shock'){const w=f.big?4:ew+1,h=f.big?4:eh+1,x0=f.big?x:x-(s?0:1),y0=f.big?y:y-1;
+      for(let j=0;j<h;j++)for(let i=0;i<w;i++)put(g,x0+i,y0+j,'h');put(g,x0+Math.floor(w/2)-(s?0:1)+(s?0:1),y0+Math.floor(h/2),'k');}
+  });
+  if(F==='angel'){const [hx,hy,hw]=f.halo;for(let i=1;i<hw-1;i++){put(g,hx+i,hy,'y');put(g,hx+i,hy+2,'y');}put(g,hx,hy+1,'y');put(g,hx+hw-1,hy+1,'y');}
+  if(F==='push'&&f.paw){const [px,py]=f.paw;part(g,RR(px,py,6,4,1.5),(x,y)=>(x===px+4&&y===py+1)?'p':'w');}
+}
+
+/* ---- variants ---- */
+function rowsVariant(rows,remap){return (g)=>{rows.forEach((r,y)=>{for(let x=0;x<r.length;x++){let ch=r[x];if(remap&&remap(x,y,ch))ch=remap(x,y,ch);if(ch!=='.')put(g,x,y,ch);}});};}
+const row=s=>'..k'+s+'k..';
+const ORIG=['...kk...........kkk...','..kook.........koOOk..','..kopokkkkkkkkkooook..',
+ row('oooooOOooOOooooo'),row('ooooooOooOoooooo'),row('oooooooooooooooo'),row('ooo'+'wk'+'oooooo'+'wk'+'ooo'),row('ooo'+'kk'+'oooooo'+'kk'+'ooo'),
+ row('ooo'+'kk'+'oooooo'+'kk'+'ooo'),row('oPP'+'oo'+'oo'+'pp'+'oo'+'oo'+'PPo'),row('oooo'+'wwk'+'ww'+'kww'+'oooo'),row('ooooo'+'wwkkww'+'ooooo'),
+ row('oooooowwwwoooooo'),row('Oooo'+'owwwwwwo'+'oooO'),row('oOoo'+'wwwwwwww'+'ooOo'),row('Oooo'+'owwwwwwo'+'oooO'),row('oOoo'+'owwwwwwo'+'ooOo'),
+ row('oooo'+'owwwwwwo'+'oooo'),row('owwo'+'oowwwwoo'+'owwo'),'..kkkkkkkkkkkkkkkkkk..'];
+const origNoEyes=(x,y,ch)=>(y>=6&&y<=8&&(x===6||x===7||x===14||x===15))?'o':null;
+
+const V=[
+ {L:'А',name:'Оригінал',d:'Той, що був: квадратний брусок, вушка-ріжки. Для порівняння.',W:22,H:20,
+  build:g=>rowsVariant(ORIG,origNoEyes)(g),tail:{x:3,y:15},
+  f:{eyes:[[6,6],[14,6]],halo:[6,-4,10],paw:[17,12]}},
+ {L:'Б',name:'Буханець 2.0',d:'Той самий брусок, але вушка більші й рожеві, кути м’якші, на лобі смужки «М».',W:24,H:20,
+  build:g=>{const W=24;
+   part(g,T(1,6,8,6,2,-1),earPaint);part(g,mir(W,T(1,6,8,6,2,-1)),earPaint);
+   const st=at([[8,4],[9,4],[9,5],[11,4],[12,4],[14,5],[14,4],[15,4],[1,14],[2,15],[1,16],[22,14],[21,15],[22,16]]);
+   const wh=U(E(12,13.6,3.6,2.1),RR(8,14,8,6,2));
+   part(g,RR(1,4,22,15,3),(x,y)=>wh(x,y)?'w':st(x,y)?'O':'o');
+   part(g,RR(3.5,17,5,2.5,1.2),()=> 'w');part(g,RR(15.5,17,5,2.5,1.2),()=>'w');},
+  tail:{x:2,y:15},f:{eyes:[[6,8],[16,8]],nose:[11,11],blushes:[[3,11],[19,11]],halo:[7,-1,10],paw:[19,12]}},
+ {L:'В',name:'Колобок',d:'Майже ідеальна кулька: голова й тіло одне ціле, лапки-коржики знизу.',W:22,H:19,
+  build:g=>{const W=22;
+   part(g,T(2,7,9,3,3,-1),earPaint);part(g,mir(W,T(2,7,9,3,3,-1)),earPaint);
+   const st=at([[9,3],[10,4],[11,4],[12,3],[8,4],[13,4],[1,10],[2,11],[1,12],[20,10],[19,11],[20,12]]);
+   const wh=U(E(11,13.4,3.6,2),E(11,16.8,4,2.6));
+   part(g,E(11,10.5,10,8.2),(x,y)=>wh(x,y)?'w':st(x,y)?'O':'o');
+   part(g,RR(4.5,16.5,4,2.5,1.2),()=>'w');part(g,RR(13.5,16.5,4,2.5,1.2),()=>'w');},
+  tail:{x:2,y:14},f:{eyes:[[6,8],[14,8]],nose:[10,11],blushes:[[3,11],[17,11]],halo:[6,-1,10],paw:[18,11]}},
+ {L:'Г',name:'Груша',d:'Сидить як справжній кіт: голівка менша, попка ширша, видно грудку й передні лапки.',W:22,H:26,
+  build:g=>{const W=22;
+   const body=U(E(11,19.2,9.6,6.8),E(11,14,6.5,5));
+   const st=at([[2,17],[3,18],[2,19],[19,17],[18,18],[19,19],[2,21],[19,21]]);
+   part(g,body,(x,y)=>E(11,19.5,4.4,6.2)(x,y)?'w':st(x,y)?'O':'o');
+   part(g,RR(6,22.5,4,3.4,1.4),()=>'w');part(g,RR(12,22.5,4,3.4,1.4),()=>'w');
+   part(g,T(4,4.5,10,1.5,4,-3),earPaint);part(g,mir(W,T(4,4.5,10,1.5,4,-3)),earPaint);
+   const hs=at([[9,2],[10,2],[11,2],[12,2],[10,3],[11,3]]);
+   part(g,E(11,7.2,7.6,5.9),(x,y)=>E(11,10.6,3.2,1.9)(x,y)?'w':hs(x,y)?'O':'o');},
+  tail:{x:3,y:22,dx:1.3,dy:1.2},f:{eyes:[[7,6],[13,6]],es:[2,2],nose:[10,9],blushes:[[4,9],[16,9]],halo:[6,-4,10],paw:[17,15]}},
+ {L:'Ґ',name:'Довгокіт',d:'Лежить «батоном» уздовж столу, голова спереду. Довгий, щоб тягнутися до краю.',W:36,H:16,
+  build:g=>{
+   const st=at([[6,6],[6,7],[10,6],[10,7],[14,6],[14,7],[18,6],[18,7],[7,8],[11,8],[15,8]]);
+   part(g,RR(1,6,27,9.5,4.5),(x,y)=>st(x,y)?'O':'o');
+   part(g,T(22,4,27,1.5,22,-2.5),earPaint);part(g,T(34,4,29,1.5,34,-2.5),earPaint);
+   const hs=at([[27,2],[28,2],[27,3],[28,3]]);
+   part(g,E(28,8,7.6,6.4),(x,y)=>E(28,11.6,3.4,1.9)(x,y)?'w':hs(x,y)?'O':'o');
+   part(g,RR(22,13.5,4.5,2.4,1.1),()=>'w');part(g,RR(29.5,13.5,4.5,2.4,1.1),()=>'w');},
+  tail:{x:1,y:9,dx:1.4,dy:0.9},f:{eyes:[[24,6],[30,6]],nose:[27,10],blushes:[[22,10],[32,10]],halo:[23,-5,10],paw:[33,9]}},
+ {L:'Д',name:'Моті',d:'Маленький пухкий пиріжечок: пласке донце, крихітні вушка, очі далеко одне від одного.',W:22,H:13,
+  build:g=>{const W=22;
+   part(g,T(3,5,8,3,3.5,-0.5),earPaint);part(g,mir(W,T(3,5,8,3,3.5,-0.5)),earPaint);
+   const st=at([[10,2],[11,2],[9,3],[12,3]]);
+   part(g,U(I(E(11,8.4,10.4,6.4),(x,y)=>y<12),RR(1,7,20,5.2,2.6)),(x,y)=>st(x,y)?'O':'o');
+   part(g,RR(6,11.4,3,1.6,.7),()=>'w');part(g,RR(13,11.4,3,1.6,.7),()=>'w');},
+  tail:{x:1,y:9,dx:1.2,dy:1.1},f:{eyes:[[5,6],[15,6]],es:[2,2],nose:[10,8],blushes:[[2,8],[18,8]],halo:[6,-2,10],paw:[17,7]}},
+ {L:'Е',name:'Товстун',d:'Широкий і важкий, очка близько посередині, щоки. Солідний кіт, який нічого не боїться.',W:28,H:20,
+  build:g=>{const W=28;
+   part(g,T(3,7,9,4,4,0),earPaint);part(g,mir(W,T(3,7,9,4,4,0)),earPaint);
+   const st=at([[11,4],[12,5],[13,4],[14,4],[15,5],[16,4],[1,12],[2,13],[1,14],[26,12],[25,13],[26,14],[1,16],[26,16]]);
+   const wh=U(E(14,12.4,4.2,2.3),E(14,16.6,6.6,3.4));
+   part(g,U(I(E(14,12,13.2,8.6),(x,y)=>y<19),RR(1.5,13,25,6,3)),(x,y)=>wh(x,y)?'w':st(x,y)?'O':'o');
+   part(g,RR(5.5,17.5,5.5,2.5,1.2),()=>'w');part(g,RR(17,17.5,5.5,2.5,1.2),()=>'w');},
+  tail:{x:2,y:15},f:{eyes:[[9,8],[17,8]],es:[2,2],nose:[13,10],blushes:[[5,11],[21,11]],halo:[9,0,10],paw:[23,11]}},
+ {L:'Є',name:'Чібі (зараз у грі)',d:'Поточна версія: велика голова, великі очі з кольоровою райдужкою.',W:26,H:22,
+  build:g=>rowsVariant(CHIBI_ROWS)(g),tail:{x:3,y:17},
+  f:{eyes:[[5,6],[17,6]],big:true,halo:[8,-4,10],paw:[21,13]}},
+];
+
+function render(v,F,pose,crop){
+  const g=newGrid(v.W,v.H);if(!crop)tail(g,v.tail,pose||0);v.build(g);face(g,v.f,F);
+  if(crop){let x0=1e9,y0=1e9,x1=-1,y1=-1;g.c.forEach((r,y)=>r.forEach((ch,x)=>{if(ch!=='.'){x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);}}));
+    g.c=g.c.slice(y0-1,y1+2).map(r=>r.slice(x0-1,x1+2));g.w=x1-x0+3;g.h=y1-y0+3;}
+  const c=document.createElement('canvas');c.width=g.w;c.height=g.h;const x=c.getContext('2d');
+  g.c.forEach((r,y)=>r.forEach((ch,i)=>{if(COL[ch]){x.fillStyle=COL[ch];x.fillRect(i,y,1,1);}}));
+  return c;
+}
+/* scene bits */
+function mug(x,y,ctx){const P=(a,b,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x+a,y+b,w,h);};
+  P(0,0,9,10,'#2b1d14');P(1,1,7,8,'#7fb8e6');P(1,1,7,2,'#a9d3f3');P(3,4,3,3,'#fff');P(9,2,3,6,'#2b1d14');P(9,3,2,4,'#7fb8e6');P(9,4,1,2,'#2b1d14');}
+function table(ctx,w,y){ctx.fillStyle='#2b1d14';ctx.fillRect(0,y,w,6);ctx.fillStyle='#c58a55';ctx.fillRect(0,y+1,w,4);ctx.fillStyle='#e0aa72';ctx.fillRect(0,y+1,w,1);
+  ctx.fillStyle='#ffc7d4';for(let i=0;i<w;i+=4)ctx.fillRect(i,y+5,2,1);}
+
+/* lineup */
+(function(){
+  const imgs=V.map(v=>render(v,'idle',1)),gap=2;
+  const LH=64,ty=46;let W=6;imgs.forEach(c=>W+=c.width+gap);
+  const cv=document.getElementById('lineup'),Sc=Math.floor(1064/W);cv.width=W;cv.height=LH;cv.style.width=W*Sc+'px';cv.style.height=LH*Sc+'px';
+  const x=cv.getContext('2d');x.fillStyle='#f4dccb';x.fillRect(0,0,W,LH);
+  x.fillStyle='#ecc9b6';for(let i=0;i<W;i+=12)x.fillRect(i,0,6,ty);
+  table(x,W,ty);let px=4;
+  imgs.forEach((c,i)=>{const v=V[i];x.drawImage(c,px,ty-(PT+v.H));
+    x.fillStyle='#2b1d14';x.font='bold 7px system-ui';x.fillText(v.L,px+PL+v.W/2-2,ty+15);px+=c.width+gap;});
+})();
+/* cards */
+const grid=document.getElementById('grid');
+V.forEach(v=>{
+  const d=document.createElement('div');d.className='card';
+  d.innerHTML=`<h2><b>${v.L}</b>${v.name}</h2><p>${v.d}</p>`;
+  const sw=86,sh=48,ty=40,sc=document.createElement('canvas');sc.width=sw;sc.height=sh;sc.className='scene';sc.style.width=sw*5+'px';sc.style.height=sh*5+'px';
+  const x=sc.getContext('2d');x.fillStyle='#f4dccb';x.fillRect(0,0,sw,sh);x.fillStyle='#ecc9b6';for(let i=0;i<sw;i+=12)x.fillRect(i,0,6,ty);
+  table(x,sw,ty);const im=render(v,'idle',2);const cx=Math.round((sw-14-im.width)/2);
+  x.globalAlpha=.18;x.fillStyle='#000';x.fillRect(cx+PL,ty-1,v.W,1);x.globalAlpha=1;
+  x.drawImage(im,cx,ty-(PT+v.H));mug(Math.min(sw-13,cx+PL+v.W+5),ty-10,x);
+  d.appendChild(sc);
+  const fr=document.createElement('div');fr.className='faces';
+  const fs=(v.W+4)*3*5+30<=492?3:2;
+  [['idle','спокій'],['blink','кліп'],['angel','янгол'],['push','штовхає'],['shock','впіймали']].forEach(([F,n],k)=>{
+    const c=render(v,F,k*0.8,true);c.style.width=c.width*fs+'px';c.style.height=c.height*fs+'px';
+    const w=document.createElement('div');w.appendChild(c);w.appendChild(document.createTextNode(n));fr.appendChild(w);});
+  d.appendChild(fr);grid.appendChild(d);
+});
+</script></body></html>

@@ -1,0 +1,26 @@
+meow1.mp3: "Cute Kitten Meow" by Breviceps, freesound (CC0 1.0).
+https://freesound.org/people/Breviceps/sounds/448084
+
+meow2.mp3: "New Cat Meow 1" by steffcaffrey, freesound (CC0 1.0).
+https://freesound.org/people/steffcaffrey/sounds/479272
+
+meow3.mp3: "Cat Meow1.wav" by steffcaffrey, freesound (CC0 1.0).
+https://freesound.org/people/steffcaffrey/sounds/262312
+
+meow4.mp3: "cat meow II" by tuberatanka, freesound (CC0 1.0).
+https://freesound.org/people/tuberatanka/sounds/110010
+
+meow_sad.mp3: "Cat meow" by philsapphire, freesound (CC0 1.0).
+https://freesound.org/people/philsapphire/sounds/256452
+
+meow_yowl.mp3: "Cat meow 5" by fthgurdy, freesound (CC0 1.0).
+https://freesound.org/people/fthgurdy/sounds/528192
+
+hiss.mp3: "hiss2.wav" by Reitanna, freesound (CC0 1.0).
+https://freesound.org/people/Reitanna/sounds/343927
+
+purr.mp3: "Cat Purr" by Veridiansunrise, freesound (CC0 1.0).
+https://freesound.org/people/Veridiansunrise/sounds/337200
+
+trill.mp3: "Cat trill 1" by MBPL, freesound (CC0 1.0).
+https://freesound.org/people/MBPL/sounds/668822
