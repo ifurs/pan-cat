@@ -1,3 +1,8 @@
-Fonts (SIL Open Font License 1.1), subset to Latin + Cyrillic, embedded in index.html by embed_fonts.py:
-Tiny5 by Stefan Schmidt — https://fonts.google.com/specimen/Tiny5
-Press Start 2P by CodeMan38 — https://fonts.google.com/specimen/Press+Start+2P
+Fonts, both under the SIL Open Font License 1.1 (full text: OFL-*.txt in this folder).
+Embedded in index.html by embed_fonts.py.
+
+Tiny5 — Copyright 2022-2024 The Tiny5 Project Authors (https://github.com/Gissio/font_tiny5).
+  Subset to Latin + Cyrillic. Tiny5 has no Reserved Font Name.
+Press Start 2P — Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net),
+  with Reserved Font Name "Press Start 2P". Embedded unmodified (all glyphs), only
+  re-wrapped as WOFF2, so the original name is kept.
