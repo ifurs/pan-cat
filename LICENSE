@@ -20,8 +20,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
----
-Third-party assets keep their own licenses:
-- audio/*.mp3 — CC0 1.0, see audio/CREDITS.txt
-- fonts/*.woff2 (also embedded in index.html) — SIL Open Font License 1.1,
-  see fonts/CREDITS.txt and fonts/OFL-*.txt
