@@ -21,5 +21,16 @@ Pixel-art phone game in one file, `index.html`, served as-is by GitHub Pages (ht
 - Phone-first: portrait, touch, logical canvas 180×320; test at 375×812. Desktop is secondary.
 - User-facing text is Ukrainian.
 
-## Dev files that are publicly served
-Pages serves the whole repo, so these dev files are public URLs: `original.html`, `cat-variants.html`, `cat-variants.png`, `chibi_rows.js`, `cat-sounds-demo.mp3`, plus the raw `audio/*.mp3`, `fonts/*` and the embed scripts. Suggestion (not done): move the prototypes and demos into `dev/` (or out of the Pages branch) so only `index.html` is the game.
+## Tests and CI
+- `npm install` once (installs `playwright-core`; uses the cached Chromium headless shell, or `npx playwright-core install chromium-headless-shell`).
+- `npm test` (= `node tests/smoke.mjs`): loads the game at 375×812 with touch, seeds an unversioned save and checks it migrates, taps «ГРАТИ», plays, checks the run (`pyrizhok_run`) and the fish/wardrobe save (`pyrizhok_save`) survive a reload, and fails on any console error, page error or failed request. It uses `window.__pz` only; the game has no extra test code.
+- `.github/workflows/smoke.yml` runs it on every push and PR.
+
+## Publishing (GitHub Pages)
+- `node tools/build-site.mjs` builds `_site/`: `index.html`, `LICENSE` and the credit/OFL files. Nothing else is published.
+- `.github/workflows/pages.yml` (on push to main): build `_site/`, smoke-test that folder (`SITE_DIR=_site`), deploy with `actions/deploy-pages`.
+- The deploy job runs only when Settings → Pages → Source is "GitHub Actions". While it is "Deploy from a branch", Pages keeps serving the whole `main` branch as before and the workflow skips the deploy with a notice.
+- If a new shipped file is ever added (unlikely for a one-file game), add it to `SHIP` in `tools/build-site.mjs`.
+
+## Dev files
+Prototypes and demos live in `dev/` (`original.html`, `cat-variants.*`, `chibi_rows.js`, `cat-sounds-demo.mp3`). With the Pages workflow they are not published; with branch deploy they are still public under `/dev/`.
