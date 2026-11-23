@@ -288,8 +288,13 @@ const MOODS={
  coffee:{em:'☕',name:'після кави',back:0.75,warn:0.7,look:1.1,fake:0.25,charm:0.9,idle:['ще кави!','працюємо-працюємо!','так-так-так!']},
 };
 const SLOTS=[{key:'coat',name:'Шерсть',list:COATS},{key:'eyes',name:'Очі',list:EYES},{key:'head',name:'Голова',list:HEADS},{key:'neck',name:'Шия',list:NECKS}];
-let SAVE={fish:0,coat:'ginger',eyes:'green',head:'none',neck:'none',owned:[],skill:0.4};
-try{const s=JSON.parse(localStorage.getItem('pyrizhok_save')||'null');if(s)SAVE=Object.assign(SAVE,s);}catch(e){}
+let SAVE={v:1,fish:0,coat:'ginger',eyes:'green',head:'none',neck:'none',owned:[],skill:0.4};
+// pyrizhok_save format: when a field changes shape, bump v and add a step here; never drop a player's fish or wardrobe.
+function migrate(s){
+  if(!s.v)s.v=1; // unversioned saves (before v1) already have the v1 fields
+  if(!Array.isArray(s.owned))delete s.owned; if(!(s.fish>=0))delete s.fish; // a broken field falls back to the default
+  return s;}
+try{const s=JSON.parse(localStorage.getItem('pyrizhok_save')||'null');if(s&&typeof s==='object')SAVE=Object.assign(SAVE,migrate(s));}catch(e){}
 function persist(){try{localStorage.setItem('pyrizhok_save',JSON.stringify(SAVE));}catch(e){}}
 
 /* ================= AUDIO ================= */
